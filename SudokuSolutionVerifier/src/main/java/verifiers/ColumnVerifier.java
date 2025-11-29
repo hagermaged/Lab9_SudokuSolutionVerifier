@@ -1,9 +1,10 @@
 package verifiers;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+
 import main.SudokuBoard;
 
 public class ColumnVerifier implements Verifier {
@@ -13,22 +14,19 @@ public class ColumnVerifier implements Verifier {
         List<VerificationResult> errors = new ArrayList<>();
 
         for (int col = 0; col < 9; col++) {
-            Set<Integer> seen = new HashSet<>();
-            List<Integer> duplicatePositions = new ArrayList<>();
-            int duplicateValue = -1;
+            Map<Integer, List<Integer>> valuePositions = new HashMap<>();
             
             for (int row = 0; row < 9; row++) {
                 int value = board.getValue(row, col);
-                if (seen.contains(value)) {
-                    if (duplicateValue == -1) duplicateValue = value;
-                    duplicatePositions.add(row + 1); // 1-indexed
-                } else {
-                    seen.add(value);
+                if (value != 0) { // Only track non-zero values
+                    valuePositions.computeIfAbsent(value, k -> new ArrayList<>()).add(row + 1);
                 }
             }
             
-            if (!duplicatePositions.isEmpty()) {
-                errors.add(new VerificationResult("COL", col + 1, duplicateValue, duplicatePositions));
+            for (Map.Entry<Integer, List<Integer>> entry : valuePositions.entrySet()) {
+                if (entry.getValue().size() > 1) {
+                    errors.add(new VerificationResult("COL", col + 1, entry.getKey(), entry.getValue()));
+                }
             }
         }
         return errors;

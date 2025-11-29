@@ -1,48 +1,40 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package verifiers;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+
 import main.SudokuBoard;
 
-/**
- *
- * @author Hajer1
- */
 public class BoxVerifier implements Verifier {
 
-      @Override
+    @Override
     public List<VerificationResult> verify(SudokuBoard board) {
         List<VerificationResult> errors = new ArrayList<>();
         
         for (int boxIndex = 0; boxIndex < 9; boxIndex++) {
-            Set<Integer> seen = new HashSet<>();
-            List<Integer> positions = new ArrayList<>();
+            Map<Integer, List<Integer>> valuePositions = new HashMap<>();
             
             int startRow = (boxIndex / 3) * 3;
             int startCol = (boxIndex % 3) * 3;
             
-            // Collect all positions where duplicates appear
+            // Collect all positions for each value in the box
             for (int i = startRow; i < startRow + 3; i++) {
                 for (int j = startCol; j < startCol + 3; j++) {
                     int value = board.getValue(i, j);
-                    if (seen.contains(value)) {
-                        positions.add(getPositionInBox(i, j, startRow, startCol));
-                    } else {
-                        seen.add(value);
+                    if (value != 0) { // Only track non-zero values
+                        int positionInBox = getPositionInBox(i, j, startRow, startCol);
+                        valuePositions.computeIfAbsent(value, k -> new ArrayList<>()).add(positionInBox);
                     }
                 }
             }
             
-            // If duplicates found, add error with all positions
-            if (!positions.isEmpty()) {
-                int duplicateValue = findDuplicateValueInBox(board, startRow, startCol);
-                errors.add(new VerificationResult("BOX", boxIndex + 1, duplicateValue, positions));
+            // Report duplicates
+            for (Map.Entry<Integer, List<Integer>> entry : valuePositions.entrySet()) {
+                if (entry.getValue().size() > 1) {
+                    errors.add(new VerificationResult("BOX", boxIndex + 1, entry.getKey(), entry.getValue()));
+                }
             }
         }
         return errors;
@@ -53,20 +45,4 @@ public class BoxVerifier implements Verifier {
         int boxCol = col - startCol;
         return boxRow * 3 + boxCol + 1; // 1-indexed position in box
     }
-    
-    private int findDuplicateValueInBox(SudokuBoard board, int startRow, int startCol) {
-        Set<Integer> seen = new HashSet<>();
-        for (int i = startRow; i < startRow + 3; i++) {
-            for (int j = startCol; j < startCol + 3; j++) {
-                int value = board.getValue(i, j);
-                if (seen.contains(value)) {
-                    return value;
-                }
-                seen.add(value);
-            }
-        }
-        return -1;
-    }
-
-
 }

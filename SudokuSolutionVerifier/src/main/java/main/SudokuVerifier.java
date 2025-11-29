@@ -1,22 +1,57 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package main;
 
-import factory.VerifierFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-import verifiers.*;
+
+import factory.VerifierFactory;
+import threading.Mode27ThreadManager;
+import threading.Mode3ThreadManager;
+import threading.SequentialThreadManager;
+import threading.ThreadManager;
+import verifiers.VerificationResult;
+import verifiers.Verifier;
 
 /**
  *
  * @author Hajer1
  */
 public class SudokuVerifier {
- public static void main(String[] args) {
-       Scanner scanner = VerifierFactory.createScanner();
+    
+    public static void main(String[] args) {
+        if (args.length == 2) {
+            // JAR mode: java -jar app.jar filepath mode
+            runJarMode(args);
+        } else {
+            // Interactive mode
+            runInteractiveMode();
+        }
+    }
+    
+    private static void runJarMode(String[] args) {
+        try {
+            String filePath = args[0];
+            int mode = Integer.parseInt(args[1]);
+            
+            // Validate mode
+            if (mode != 0 && mode != 3 && mode != 27) {
+                System.out.println("Invalid mode. Use 0, 3, or 27.");
+                return;
+            }
+            
+            // Execute verification
+            executeVerification(filePath, mode);
+            
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Mode must be a number (0, 3, or 27)");
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private static void runInteractiveMode() {
+        Scanner scanner = VerifierFactory.createScanner();
         
         try {
             // Get file path from user
@@ -43,52 +78,55 @@ public class SudokuVerifier {
             // Close the factory-created scanner
             scanner.close();
         }
-}
- 
-   private static void executeVerification(String filePath, int mode) {
-        // Use Factory to create SudokuBoard
-        SudokuBoard board = VerifierFactory.createSudokuBoard(filePath);
-        
-        // Show factory configuration
-        System.out.println("\n" + VerifierFactory.getFactoryDescription(mode));
-        
-        switch (mode) {
-            case 0:
-                runSequential(board, mode);
-                break;
-            case 3:
-                System.out.println("Mode 3 (4 threads) - Running in sequential fallback mode");
-                runSequential(board, mode);
-                break;
-            case 27:
-                System.out.println("Mode 27 (28 threads) - Running in sequential fallback mode");
-                runSequential(board, mode);
-                break;
+    }
+    
+    private static void executeVerification(String filePath, int mode) {
+        try {
+            // Use Factory to create SudokuBoard
+            SudokuBoard board = VerifierFactory.createSudokuBoard(filePath);
+            
+            // Verify board was loaded successfully
+            if (!board.isBoardLoaded()) {
+                System.out.println("Error: Failed to load Sudoku board from " + filePath);
+                return;
+            }
+            
+            // Show factory configuration
+            System.out.println("\n" + VerifierFactory.getFactoryDescription(mode));
+            
+            // Display the board
+            board.printBoard();
+            System.out.println();
+            
+            // Use Factory to create all verifiers for the specified mode
+            List<Verifier> verifiers = VerifierFactory.createVerifiersForMode(mode);
+            
+            // Create appropriate thread manager and execute
+            ThreadManager threadManager = createThreadManager(mode);
+            List<VerificationResult> allErrors = threadManager.execute(verifiers, board);
+            
+            printResults(allErrors);
+            
+        } catch (Exception e) {
+            System.out.println("Error during verification: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
-    private static void runSequential(SudokuBoard board, int mode) {
-        // Use Factory to create all verifiers for the specified mode
-        List<Verifier> verifiers = VerifierFactory.createVerifiersForMode(mode);
-        
-        // Display what was created
-        System.out.println("Created " + verifiers.size() + " verifier(s):");
-        for (int i = 0; i < verifiers.size(); i++) {
-            Verifier verifier = verifiers.get(i);
-            System.out.println("  " + (i+1) + ". " + getVerifierDescription(verifier));
+    private static ThreadManager createThreadManager(int mode) {
+        switch (mode) {
+            case 0:
+                return new SequentialThreadManager();
+            case 3:
+                return new Mode3ThreadManager();
+            case 27:
+                return new Mode27ThreadManager();
+            default:
+                throw new IllegalArgumentException("Invalid mode: " + mode);
         }
-        System.out.println();
-        
-        // Execute all verifiers sequentially
-        List<VerificationResult> allErrors = new ArrayList<>();
-        for (Verifier verifier : verifiers) {
-            List<VerificationResult> errors = verifier.verify(board);
-            allErrors.addAll(errors);
-        }
-        
-        printResults(allErrors);
     }
-        private static String getVerifierDescription(Verifier verifier) {
+    
+    private static String getVerifierDescription(Verifier verifier) {
         if (verifier instanceof verifiers.RowVerifier) return "Comprehensive Row Verifier";
         if (verifier instanceof verifiers.ColumnVerifier) return "Comprehensive Column Verifier";
         if (verifier instanceof verifiers.BoxVerifier) return "Comprehensive Box Verifier";
@@ -106,7 +144,8 @@ public class SudokuVerifier {
         }
         return "Unknown Verifier Type";
     }
-            private static void printResults(List<VerificationResult> allErrors) {
+    
+    private static void printResults(List<VerificationResult> allErrors) {
         if (allErrors.isEmpty()) {
             System.out.println("VALID");
         } else {
@@ -125,24 +164,29 @@ public class SudokuVerifier {
             
             // Print errors with proper sections
             if (!rowErrors.isEmpty()) {
+                System.out.println("ROW ERRORS:");
                 for (VerificationResult error : rowErrors) {
-                    System.out.println(error);
+                    System.out.println("  " + error);
                 }
             }
             
             if (!colErrors.isEmpty()) {
-                if (!rowErrors.isEmpty()) System.out.println("------------------------------------------");
+                if (!rowErrors.isEmpty()) System.out.println();
+                System.out.println("COLUMN ERRORS:");
                 for (VerificationResult error : colErrors) {
-                    System.out.println(error);
+                    System.out.println("  " + error);
                 }
             }
             
             if (!boxErrors.isEmpty()) {
-                if (!rowErrors.isEmpty() || !colErrors.isEmpty()) System.out.println("------------------------------------------");
+                if (!rowErrors.isEmpty() || !colErrors.isEmpty()) System.out.println();
+                System.out.println("BOX ERRORS:");
                 for (VerificationResult error : boxErrors) {
-                    System.out.println(error);
+                    System.out.println("  " + error);
                 }
             }
+            
+            System.out.println("\nTotal errors found: " + allErrors.size());
         }
     }
 }
