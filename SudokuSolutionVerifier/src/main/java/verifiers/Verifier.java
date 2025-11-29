@@ -3,11 +3,13 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package verifiers;
-
+import java.util.List;
+import main.SudokuBoard;
 /**
  *
  * @author Hajer1
  */
-public class Verifier {
+public interface Verifier {
     
+ List<VerificationResult>verify(SudokuBoard board);
 }
